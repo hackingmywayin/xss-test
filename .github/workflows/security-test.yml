@@ -1,0 +1,37 @@
+name: Security Test
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check GITHUB_TOKEN scopes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "=== Token info ==="
+          curl -sI "https://api.github.com/user" -H "Authorization: bearer $GH_TOKEN" | grep -i "x-oauth-scopes\|x-accepted-oauth-scopes\|x-ratelimit"
+          
+          echo ""
+          echo "=== Can token access other repos? ==="
+          curl -s -o /dev/null -w "Own repo: %{http_code}\n" "https://api.github.com/repos/hackingmywayin/xss-test" -H "Authorization: bearer $GH_TOKEN"
+          curl -s -o /dev/null -w "Other public: %{http_code}\n" "https://api.github.com/repos/torvalds/linux" -H "Authorization: bearer $GH_TOKEN"
+          curl -s -o /dev/null -w "Private repo: %{http_code}\n" "https://api.github.com/repos/tryinganotherchance/private-secret-data" -H "Authorization: bearer $GH_TOKEN"
+          
+          echo ""
+          echo "=== Runner network info ==="
+          curl -s ifconfig.me
+          echo ""
+          
+          echo ""
+          echo "=== Check internal metadata ==="
+          curl -s -o /dev/null -w "EC2 metadata: %{http_code}\n" --connect-timeout 3 "http://169.254.169.254/latest/meta-data/" || echo "metadata not accessible"
+          
+          echo ""
+          echo "=== Check Azure IMDS ==="
+          curl -s -o /dev/null -w "Azure IMDS: %{http_code}\n" --connect-timeout 3 -H "Metadata: true" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" || echo "IMDS not accessible"
+          
+          echo ""
+          echo "=== Check runner environment ==="
+          env | grep -i "ACTIONS\|RUNNER\|GITHUB" | sort | head -30
